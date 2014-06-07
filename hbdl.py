@@ -5,6 +5,8 @@ import json
 import mechanize
 import cookielib
 import urllib2
+import argparse
+import ConfigParser
 
 
 __GAMEKEY_DIR__ = 'gamekeys'
@@ -47,7 +49,7 @@ def download_file(url, directory, filename):
 
 
 # refresh the index file (download new versions of the gamekeys)
-def refresh_index(username, password):
+def refresh_index(username, password, headers):
     url_home = 'https://www.humblebundle.com/home'
     url_login = 'https://www.humblebundle.com/login'
     url_order = 'https://www.humblebundle.com/api/v1/order/%s'
@@ -61,6 +63,7 @@ def refresh_index(username, password):
     # set up the browser
     br = mechanize.Browser()
     br.set_handle_robots(False)
+    br.addheaders = headers
 
     # set up the cookie jar
     cj = cookielib.LWPCookieJar('cookies.txt')
@@ -132,3 +135,43 @@ def refresh_index(username, password):
 
     # we're done
     print 'Done.'
+
+
+# convert a config section to a map
+def section_to_map(config, section):
+    m = {}
+    options = config.options(section)
+
+    for option in options:
+        try:
+            m[option] = config.get(section, option)
+        except:
+            m[option] = None
+
+    return m
+
+
+if __name__ == '__main__':
+    config = ConfigParser.ConfigParser()
+    config.read('config.ini')
+
+    parser = argparse.ArgumentParser(description='Download Humble Bundle stuff!')
+    parser.add_argument('--refresh-keys', help='refresh gamekeys', action='store_true')
+    parser.add_argument('--download', help='download all or the specified items', action='store_true')
+    parser.add_argument('item', help='list of items to download', nargs='*')
+
+    args = parser.parse_args()
+
+    if args.refresh_keys:
+        login = section_to_map(config, 'login')
+        headermap = section_to_map(config, 'headers')
+
+        headers = []
+        for k in headermap:
+            headers.append((k, headermap[k]))
+
+        refresh_index(login['username'], login['password'], headers)
+
+    if args.download:
+        print 'not yet implemented'
+        print args.item
