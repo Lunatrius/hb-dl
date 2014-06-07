@@ -1,0 +1,7 @@
+# python stuff
+__pycache__/
+*.py[cod]
+
+# hb stuff
+cookies.txt
+gamekeys/
