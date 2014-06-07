@@ -2,6 +2,7 @@
 import os
 import re
 import json
+import hashlib
 import mechanize
 import cookielib
 import urllib2
@@ -47,6 +48,8 @@ def download_file(url, directory, filename):
             status = r'  %11s / %11s [%6.2f%%]' % (pretty_file_size(file_size_dl), pretty_file_size(file_size), file_size_dl * 100.0 / file_size)
             status = status + chr(8) * (len(status) + 1)
             print status,
+
+    print ''
 
 
 # refresh the index file (download new versions of the gamekeys)
@@ -233,16 +236,159 @@ def process_download_struct(download_struct):
     return data
 
 
-if __name__ == '__main__':
+# print a fancy title
+def print_title(title):
+    print '================================================================'
+    print '== %s' % title
+    print '================================================================'
+
+
+# get teh file name from a URL
+def get_filename(url):
+    filename = url.split('/')[-1]
+    return filename.split('?')[0]
+
+
+# verify the md5 of a file
+def verify_md5(filepath, md5):
+    computed_md5 = ''
+
+    with open(filepath, 'rb') as f:
+        data = f.read()
+        computed_md5 = hashlib.md5(data).hexdigest()
+
+    return computed_md5 == md5
+
+
+# list all available platforms
+def list_platforms(data):
+    downloads = []
+    for machine_name in data:
+        downloads.extend(data[machine_name]['downloads'])
+
+    platforms = list(set([x['platform'] for x in downloads]))
+    platforms.sort()
+
+    print_title('Platforms')
+    for platform in platforms:
+        print '%s' % platform
+
+    print ''
+
+
+# list all available products
+def list_product_names(data):
+    products = [(data[machine_name]['human_name'], machine_name, data[machine_name]['bundles']) for machine_name in data]
+    products.sort()
+
+    print_title('Products')
+    for product in products:
+        print '%s; %s [%s]' % (product[0], product[1], ', '.join(map(str, product[2])))
+
+    print ''
+
+
+# procss all products
+def process_download_products(dirs, products):
+    for product in products:
+        print_title(product['human_name'])
+        dirs.append(product['machine_name'])
+
+        try:
+            process_download_downloads(list(dirs), product['downloads'])
+        except Exception, e:
+            print e
+
+        dirs.pop()
+
+
+# procss all downloads
+def process_download_downloads(dirs, downloads):
+    for download in downloads:
+        dirs.append(download['machine_name'])
+
+        try:
+            process_download_files(list(dirs), download['files'])
+        except Exception, e:
+            print e
+
+        dirs.pop()
+
+
+# procss all files
+def process_download_files(dirs, files):
+    for f in files:
+        if 'arch' in f:
+            dirs.append(f['arch'])
+
+        try:
+            os.makedirs(os.path.join(*dirs))
+        except Exception, e:
+            pass
+
+        url = f['url']
+        dirpath = os.path.join(*dirs)
+
+        filename = get_filename(url)
+        filepath = os.path.join(dirpath, filename)
+
+        if os.path.exists(filepath) and verify_md5(filepath, f['md5']):
+            print 'Up to date: %s' % filename
+        else:
+            try:
+                download_file(url, dirpath, filename)
+                if not verify_md5(filepath, f['md5']):
+                    print 'md5 missmatch for %s!' % filename
+            except Exception, e:
+                print e
+
+        if 'arch' in f:
+            dirs.pop()
+
+
+def main():
     parser = argparse.ArgumentParser(description='Download Humble Bundle stuff!')
     parser.add_argument('-r', '--refresh-keys', help='refresh gamekeys', action='store_true')
+    parser.add_argument('-l', '--list', help='list all available products', action='store_true')
     parser.add_argument('-d', '--download', help='download the specified products or all if none is given', nargs='*')
+    parser.add_argument('-p', '--platform', help='limit the selection to specified platforms', nargs='*')
 
     args = parser.parse_args()
 
-    if args.refresh_keys:
-        refresh_index()
+    # load up the index file
+    with open(__GAMEKEY_FILE__ % 'index', 'r') as f:
+        data = json.load(f)
 
-    if args.download:
-        print 'not yet implemented'
-        print args.item
+    if args.list:
+        list_platforms(data['products'])
+        list_product_names(data['products'])
+    else:
+        if args.refresh_keys:
+            refresh_index()
+
+        # build initial list
+        products = [data['products'][key] for key in data['products']]
+
+        # filter out only things the user wants
+        if args.download and len(args.download) > 0:
+            downloads = [s.lower() for s in args.download]
+            products = [product for product in products if any(dl in product['machine_name'].lower() or dl in product['human_name'].lower() for dl in downloads)]
+
+        # filter out only platforms the user wants
+        if args.platform and len(args.platform) > 0:
+            platforms = [s.lower() for s in args.platform]
+
+            for product in products:
+                product['downloads'] = [download for download in product['downloads'] if any(platform in download['platform'] for platform in platforms)]
+
+            products = [product for product in products if product['downloads']]
+
+        # set up teh root directory
+        dirs = [__DOWNLOAD_DIR__]
+
+        # process all products
+        process_download_products(dirs, products)
+
+
+if __name__ == '__main__':
+    main()
