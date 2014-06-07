@@ -348,10 +348,11 @@ def process_download_files(dirs, files, dry):
         if 'arch' in f:
             dirs.append(f['arch'])
 
-        try:
-            os.makedirs(os.path.join(*dirs))
-        except Exception, e:
-            pass
+        if not dry:
+            try:
+                os.makedirs(os.path.join(*dirs))
+            except Exception, e:
+                pass
 
         url = f['url']
         dirpath = os.path.join(*dirs)
