@@ -356,14 +356,19 @@ def main():
     args = parser.parse_args()
 
     # load up the index file
-    with open(__GAMEKEY_FILE__ % 'index', 'r') as f:
-        data = json.load(f)
+    force_refresh = False
+    try:
+        with open(__GAMEKEY_FILE__ % 'index', 'r') as f:
+            data = json.load(f)
+    except Exception, e:
+        print 'Failed to read index file, forcing refresh.'
+        force_refresh = True
 
     if args.list:
         list_platforms(data['products'])
         list_product_names(data['products'])
     else:
-        if args.refresh_keys:
+        if args.refresh_keys or force_refresh:
             refresh_index()
 
         # build initial list
