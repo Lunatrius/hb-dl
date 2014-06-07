@@ -5,12 +5,13 @@ import json
 import mechanize
 import cookielib
 import urllib2
+import getpass
 import argparse
-import ConfigParser
 
 
 __GAMEKEY_DIR__ = 'gamekeys'
 __GAMEKEY_FILE__ = __GAMEKEY_DIR__ + '/%s.json'
+__DOWNLOAD_DIR__ = 'downloads'
 
 
 # prettify the file size with a suffix
@@ -49,7 +50,7 @@ def download_file(url, directory, filename):
 
 
 # refresh the index file (download new versions of the gamekeys)
-def refresh_index(username, password, headers):
+def refresh_index():
     url_home = 'https://www.humblebundle.com/home'
     url_login = 'https://www.humblebundle.com/login'
     url_order = 'https://www.humblebundle.com/api/v1/order/%s'
@@ -63,7 +64,6 @@ def refresh_index(username, password, headers):
     # set up the browser
     br = mechanize.Browser()
     br.set_handle_robots(False)
-    br.addheaders = headers
 
     # set up the cookie jar
     cj = cookielib.LWPCookieJar('cookies.txt')
@@ -83,6 +83,21 @@ def refresh_index(username, password, headers):
     if url_login in br.geturl():
         print 'Trying to log in...'
         form_index = 0
+
+        # ask for the username/email
+        username = raw_input('Username [%s]: ' % getpass.getuser())
+        if not username:
+            username = getpass.getuser()
+
+        # ask for a password with confirmation
+        pprompt = lambda: (getpass.getpass(), getpass.getpass('Password (retype): '))
+
+        p1, p2 = pprompt()
+        while p1 != p2:
+            print('Passwords do not match. Try again.')
+            p1, p2 = pprompt()
+
+        password = p1
 
         # find the login form and log in
         for form in br.forms():
@@ -218,40 +233,15 @@ def process_download_struct(download_struct):
     return data
 
 
-# convert a config section to a map
-def section_to_map(config, section):
-    m = {}
-    options = config.options(section)
-
-    for option in options:
-        try:
-            m[option] = config.get(section, option)
-        except:
-            m[option] = None
-
-    return m
-
-
 if __name__ == '__main__':
-    config = ConfigParser.ConfigParser()
-    config.read('config.ini')
-
     parser = argparse.ArgumentParser(description='Download Humble Bundle stuff!')
-    parser.add_argument('--refresh-keys', help='refresh gamekeys', action='store_true')
-    parser.add_argument('--download', help='download all or the specified items', action='store_true')
-    parser.add_argument('item', help='list of items to download', nargs='*')
+    parser.add_argument('-r', '--refresh-keys', help='refresh gamekeys', action='store_true')
+    parser.add_argument('-d', '--download', help='download the specified products or all if none is given', nargs='*')
 
     args = parser.parse_args()
 
     if args.refresh_keys:
-        login = section_to_map(config, 'login')
-        headermap = section_to_map(config, 'headers')
-
-        headers = []
-        for k in headermap:
-            headers.append((k, headermap[k]))
-
-        refresh_index(login['username'], login['password'], headers)
+        refresh_index()
 
     if args.download:
         print 'not yet implemented'
