@@ -1,4 +1,21 @@
 #!/usr/bin/env python
+
+'''
+Download anything from claimed HB pages!
+
+Usage:
+  hbdl.py -p audio -d bastion
+    downloads all audio files that contains bastion in the name
+
+  hbdl.py -p windows linux -d nightsky
+    downloads all nightsky files that are for windows OR linux
+
+  hbdl.py -d nightsky "the swapper"
+    downloads all nightsky AND "the swapper" files
+
+NOTE: I'm no python expert
+'''
+
 import os
 import re
 import json
