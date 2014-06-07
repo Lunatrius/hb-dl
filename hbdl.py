@@ -4,10 +4,46 @@ import re
 import json
 import mechanize
 import cookielib
+import urllib2
 
 
 __GAMEKEY_DIR__ = 'gamekeys'
 __GAMEKEY_FILE__ = __GAMEKEY_DIR__ + '/%s.json'
+
+
+# prettify the file size with a suffix
+def pretty_file_size(size):
+    units = ('B', 'KiB', 'MiB', 'GiB')
+    i = 0
+
+    while size >= 1024.0:
+        size /= 1024.0
+        i += 1
+
+    return '%.2f %s' % (size, units[i])
+
+
+# download a file and save it to the disk
+def download_file(url, directory, filename):
+    stream = urllib2.urlopen(url)
+
+    with open(os.path.join(directory, filename), 'wb') as f:
+        meta = stream.info()
+        file_size = int(meta.getheaders('Content-Length')[0])
+        print 'Downloading: %s' % (filename)
+
+        file_size_dl = 0
+        block_size = 8192
+        while True:
+            buff = stream.read(block_size)
+            if not buff:
+                break
+
+            file_size_dl += len(buff)
+            f.write(buff)
+            status = r'  %11s / %11s [%6.2f%%]' % (pretty_file_size(file_size_dl), pretty_file_size(file_size), file_size_dl * 100.0 / file_size)
+            status = status + chr(8) * (len(status) + 1)
+            print status,
 
 
 # refresh the index file (download new versions of the gamekeys)
