@@ -116,6 +116,11 @@ def refresh_index(username, password, headers):
     # grab all the gamekey data
     key_index = 0
     print 'Collecting keys...'
+
+    data = {}
+    data['bundles'] = {}
+    data['products'] = {}
+
     for gamekey in gamekeys:
         print '  %d/%d' % (key_index + 1, len(gamekeys))
         response = br.open(url_order % gamekey)
@@ -124,17 +129,93 @@ def refresh_index(username, password, headers):
         with open(__GAMEKEY_FILE__ % gamekey, 'w') as f:
             f.write(content)
 
+        process_gamekey(data, gamekey, json.loads(content))
+
         key_index += 1
 
     # save the index file
     with open(__GAMEKEY_FILE__ % 'index', 'w') as f:
-        json.dump(gamekeys, f, indent=2)
+        json.dump(data, f, indent=2, sort_keys=True)
 
     # save the cookie jar
     cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
     # we're done
     print 'Done.'
+
+
+# parse out the important bits
+def process_gamekey(data, gamekey, keydata):
+    bundle_name = keydata['product']['machine_name']
+    data['bundles'][bundle_name] = {}
+    data['bundles'][bundle_name]['name'] = keydata['product']['human_name']
+    data['bundles'][bundle_name]['key'] = gamekey
+
+    print '    %s (%d)' % (keydata['product']['human_name'], len(keydata['subproducts']))
+    for item in keydata['subproducts']:
+        product = process_product(item)
+        if product['machine_name'] not in data['products']:
+            data['products'][product['machine_name']] = product
+        data['products'][product['machine_name']]['bundles'].append(keydata['product']['machine_name'])
+
+
+# parse out the important bits
+def process_product(product):
+    data = {}
+
+    data['bundles'] = []
+    data['machine_name'] = product['machine_name']
+    data['human_name'] = product['human_name']
+    data['icon'] = product['icon']
+
+    downloads = []
+
+    for download in product['downloads']:
+        downloads.append(process_download(download))
+
+    data['downloads'] = downloads
+
+    return data
+
+
+# parse out the important bits
+def process_download(download):
+    data = {}
+
+    data['machine_name'] = download['machine_name']
+    data['platform'] = download['platform']
+
+    files = []
+    for download_struct in download['download_struct']:
+        f = process_download_struct(download_struct)
+        if len(f) > 0:
+            files.append(f)
+
+    data['files'] = files
+
+    return data
+
+
+# parse out the important bits
+def process_download_struct(download_struct):
+    data = {}
+
+    if 'url' in download_struct:
+        data['name'] = download_struct['name']
+        data['file_size'] = download_struct['file_size']
+        if 'sha1' in download_struct:
+            data['sha1'] = download_struct['sha1']
+        data['md5'] = download_struct['md5']
+        data['url'] = download_struct['url']['web']
+
+        if 'arch' in download_struct:
+            data['arch'] = download_struct['arch']
+    elif 'external_link' in download_struct:
+        data['external'] = download_struct['external_link']
+    else:
+        print '[!] Skipping %s' % download_struct
+
+    return data
 
 
 # convert a config section to a map
