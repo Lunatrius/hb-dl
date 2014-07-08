@@ -18,6 +18,7 @@ NOTE: I'm no python expert
 
 import os
 import re
+import sys
 import json
 import hashlib
 import mechanize
@@ -27,9 +28,14 @@ import getpass
 import argparse
 
 
+__ENCODING__ = sys.stdout.encoding if sys.stdout.encoding else 'utf-8'
 __GAMEKEY_DIR__ = 'gamekeys'
 __GAMEKEY_FILE__ = __GAMEKEY_DIR__ + '/%s.json'
 __DOWNLOAD_DIR__ = 'downloads'
+
+
+def print_msg(msg, *args):
+    print (msg % args).encode(__ENCODING__, errors='replace')
 
 
 # prettify the file size with a suffix
@@ -96,12 +102,12 @@ def refresh_index():
     br.set_cookiejar(cj)
 
     # open /home
-    print 'Opening /home...'
+    print_msg('Opening /home...')
     br.open(url_home)
 
     # the user is not logged in
     if url_login in br.geturl():
-        print 'Trying to log in...'
+        print_msg('Trying to log in...')
         form_index = 0
 
         # ask for the username/email
@@ -114,7 +120,7 @@ def refresh_index():
 
         p1, p2 = pprompt()
         while p1 != p2:
-            print('Passwords do not match. Try again.')
+            print_msg('Passwords do not match. Try again.')
             p1, p2 = pprompt()
 
         password = p1
@@ -122,7 +128,7 @@ def refresh_index():
         # find the login form and log in
         for form in br.forms():
             if form.action == url_login:
-                print 'Found the form!'
+                print_msg('Found the form!')
                 br.select_form(nr=form_index)
                 br.form['username'] = username
                 br.form['password'] = password
@@ -133,8 +139,8 @@ def refresh_index():
 
     # stop the collection if we didn't land on /home
     if url_home not in br.geturl():
-        print 'Did not land on /home, stopping!'
-        print '  %s' % (br.geturl())
+        print_msg('Did not land on /home, stopping!')
+        print_msg('  %s', br.geturl())
         return
 
     # save the cookie jar
@@ -150,14 +156,14 @@ def refresh_index():
 
     # grab all the gamekey data
     key_index = 0
-    print 'Collecting keys...'
+    print_msg('Collecting keys...')
 
     data = {}
     data['bundles'] = {}
     data['products'] = {}
 
     for gamekey in gamekeys:
-        print '  %d/%d' % (key_index + 1, len(gamekeys))
+        print_msg('  %d/%d', key_index + 1, len(gamekeys))
         response = br.open(url_order % gamekey)
         content = response.read()
 
@@ -176,7 +182,7 @@ def refresh_index():
     cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
     # we're done
-    print 'Done.'
+    print_msg('Done.')
 
 
 # parse out the important bits
@@ -186,7 +192,7 @@ def process_gamekey(data, gamekey, keydata):
     data['bundles'][bundle_name]['name'] = keydata['product']['human_name']
     data['bundles'][bundle_name]['key'] = gamekey
 
-    print '    %s (%d)' % (keydata['product']['human_name'], len(keydata['subproducts']))
+    print_msg('    %s (%d)', keydata['product']['human_name'], len(keydata['subproducts']))
     for item in keydata['subproducts']:
         product = process_product(item)
         if product['machine_name'] not in data['products']:
@@ -248,16 +254,16 @@ def process_download_struct(download_struct):
     elif 'external_link' in download_struct:
         data['external'] = download_struct['external_link']
     else:
-        print '[!] Skipping %s' % download_struct
+        print_msg('[!] Skipping %s', download_struct)
 
     return data
 
 
 # print a fancy title
 def print_title(title):
-    print '================================================================'
-    print '== %s' % title
-    print '================================================================'
+    print_msg('================================================================')
+    print_msg('== %s', title)
+    print_msg('================================================================')
 
 
 # get the file name from a URL
@@ -288,9 +294,9 @@ def list_platforms(data):
 
     print_title('Platforms')
     for platform in platforms:
-        print '%s' % platform
+        print_msg('%s', platform)
 
-    print ''
+    print_msg('')
 
 
 # list all available products
@@ -300,9 +306,9 @@ def list_product_names(data):
 
     print_title('Products')
     for product in products:
-        print '%s; %s [%s]' % (product[0], product[1], ', '.join(map(str, product[2])))
+        print_msg('%s; %s [%s]', product[0], product[1], ', '.join(map(str, product[2])))
 
-    print ''
+    print_msg('')
 
 
 # process all products
@@ -316,7 +322,7 @@ def process_download_products(dirs, products, dry):
         try:
             size += process_download_downloads(list(dirs), product['downloads'], dry)
         except Exception, e:
-            print 'error[download/products]', e
+            print_msg('error[download/products] %s', e)
 
         dirs.pop()
 
@@ -333,7 +339,7 @@ def process_download_downloads(dirs, downloads, dry):
         try:
             size += process_download_files(list(dirs), download['files'], dry)
         except Exception, e:
-            print 'error[download/downloads]', e
+            print_msg('error[download/downloads] %s', e)
 
         dirs.pop()
 
@@ -361,18 +367,18 @@ def process_download_files(dirs, files, dry):
         filepath = os.path.join(dirpath, filename)
 
         if os.path.exists(filepath) and verify_md5(filepath, f['md5']):
-            print 'Up to date: %s' % filename
+            print_msg('Up to date: %s', filename)
         else:
             size += f['file_size']
             if dry:
-                print 'Will download: %s (%s)' % (filename, pretty_file_size(f['file_size']))
+                print_msg('Will download: %s (%s)', filename, pretty_file_size(f['file_size']))
             else:
                 try:
                     download_file(url, dirpath, filename)
                     if not verify_md5(filepath, f['md5']):
-                        print 'md5 missmatch for %s!' % filename
+                        print_msg('md5 missmatch for %s!', filename)
                 except Exception, e:
-                    print 'error[download/files]', e
+                    print_msg('error[download/files] %s', e)
 
         if 'arch' in f:
             dirs.pop()
@@ -395,7 +401,7 @@ def main():
         with open(__GAMEKEY_FILE__ % 'index', 'r') as f:
             data = json.load(f)
     except Exception, e:
-        print 'Failed to read index file, forcing refresh.'
+        print_msg('Failed to read index file, forcing refresh.')
         force_refresh = True
 
     if args.list:
@@ -429,7 +435,7 @@ def main():
         size = process_download_products(dirs, products, args.dry)
 
         # print total download amount
-        print '\nTotal: %s' % pretty_file_size(size)
+        print_msg('\nTotal: %s', pretty_file_size(size))
 
 
 if __name__ == '__main__':
