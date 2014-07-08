@@ -164,13 +164,16 @@ def refresh_index():
 
     for gamekey in gamekeys:
         print_msg('  %d/%d', key_index + 1, len(gamekeys))
-        response = br.open(url_order % gamekey)
-        content = response.read()
+        try:
+            response = br.open(url_order % gamekey)
+            content = response.read()
 
-        with open(__GAMEKEY_FILE__ % gamekey, 'w') as f:
-            f.write(content)
+            with open(__GAMEKEY_FILE__ % gamekey, 'w') as f:
+                f.write(content)
 
-        process_gamekey(data, gamekey, json.loads(content))
+            process_gamekey(data, gamekey, json.loads(content))
+        except Exception as e:
+            print_msg('error[refresh] %s', e)
 
         key_index += 1
 
