@@ -366,8 +366,29 @@ def process_download_files(dirs, files, run):
         filename = get_filename(url)
         filepath = os.path.join(dirpath, filename)
 
-        if os.path.exists(filepath) and verify_md5(filepath, f['md5']):
+        save = False
+        try:
+            with open(__GAMEKEY_FILE__ % 'index', 'r') as fh:
+                data = json.load(fh)
+                if not 'downloads' in data:
+                    data['downloads'] = {}
+        except Exception, e:
+            pass
+
+        exists = False
+        if data and f['md5'] in data['downloads']:
+            path = data['downloads'][f['md5']]
+            if os.path.exists(path) and verify_md5(path, f['md5']):
+                exists = True
+            else:
+                data['downloads'].pop(f['md5'], None)
+
+        if os.path.exists(filepath) and verify_md5(filepath, f['md5']) or exists:
             print_msg('Up to date: %s', filename)
+
+            if data:
+                save = True
+                data['downloads'][f['md5']] = filepath.replace(os.path.sep, '/')
         else:
             size += f['file_size']
             if not run:
@@ -377,9 +398,16 @@ def process_download_files(dirs, files, run):
                     download_file(url, dirpath, filename)
                     if not verify_md5(filepath, f['md5']):
                         print_msg('md5 missmatch for %s!', filename)
+                    elif data:
+                        save = True
+                        data['downloads'][f['md5']] = filepath.replace(os.path.sep, '/')
 
                 except Exception, e:
                     print_msg('error[download/files] %s', e)
+
+        if save:
+            with open(__GAMEKEY_FILE__ % 'index', 'w') as fh:
+                json.dump(data, fh, indent=2, sort_keys=True)
 
         if 'arch' in f:
             dirs.pop()
