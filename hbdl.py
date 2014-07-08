@@ -346,8 +346,11 @@ def process_download_downloads(dirs, downloads, run):
     return size
 
 
+knownhashes = []
+
 # process all files
 def process_download_files(dirs, files, run):
+    global knownhashes
     size = 0
 
     for f in files:
@@ -382,6 +385,11 @@ def process_download_files(dirs, files, run):
                 exists = True
             else:
                 data['downloads'].pop(f['md5'], None)
+
+        if f['md5'] in knownhashes:
+            exists = True
+        else:
+            knownhashes.append(f['md5'])
 
         if os.path.exists(filepath) and verify_md5(filepath, f['md5']) or exists:
             print_msg('Up to date: %s', filename)
