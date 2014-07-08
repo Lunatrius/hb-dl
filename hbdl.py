@@ -84,7 +84,7 @@ def refresh_index():
     # make sure the directory exists
     try:
         os.makedirs(__GAMEKEY_DIR__)
-    except Exception, e:
+    except Exception as e:
         pass
 
     # set up the browser
@@ -95,7 +95,7 @@ def refresh_index():
     cj = cookielib.LWPCookieJar('cookies.txt')
     try:
         cj.load('cookies.txt')
-    except Exception, e:
+    except Exception as e:
         pass
     cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
@@ -321,7 +321,7 @@ def process_download_products(dirs, products, run):
 
         try:
             size += process_download_downloads(list(dirs), product['downloads'], run)
-        except Exception, e:
+        except Exception as e:
             print_msg('error[download/products] %s', e)
 
         dirs.pop()
@@ -338,7 +338,7 @@ def process_download_downloads(dirs, downloads, run):
 
         try:
             size += process_download_files(list(dirs), download['files'], run)
-        except Exception, e:
+        except Exception as e:
             print_msg('error[download/downloads] %s', e)
 
         dirs.pop()
@@ -360,7 +360,7 @@ def process_download_files(dirs, files, run):
         if run:
             try:
                 os.makedirs(os.path.join(*dirs))
-            except Exception, e:
+            except Exception as e:
                 pass
 
         url = f['url']
@@ -375,7 +375,7 @@ def process_download_files(dirs, files, run):
                 data = json.load(fh)
                 if not 'downloads' in data:
                     data['downloads'] = {}
-        except Exception, e:
+        except Exception as e:
             pass
 
         exists = False
@@ -410,7 +410,7 @@ def process_download_files(dirs, files, run):
                         save = True
                         data['downloads'][f['md5']] = filepath.replace(os.path.sep, '/')
 
-                except Exception, e:
+                except Exception as e:
                     print_msg('error[download/files] %s', e)
 
         if save:
@@ -437,7 +437,7 @@ def main():
     try:
         with open(__GAMEKEY_FILE__ % 'index', 'r') as f:
             data = json.load(f)
-    except Exception, e:
+    except Exception as e:
         print_msg('Failed to read index file, forcing refresh.')
         force_refresh = True
 
