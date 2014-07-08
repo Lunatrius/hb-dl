@@ -260,7 +260,7 @@ def print_title(title):
     print '================================================================'
 
 
-# get teh file name from a URL
+# get the file name from a URL
 def get_filename(url):
     filename = url.split('/')[-1]
     return filename.split('?')[0]
@@ -305,7 +305,7 @@ def list_product_names(data):
     print ''
 
 
-# procss all products
+# process all products
 def process_download_products(dirs, products, dry):
     size = 0
 
@@ -323,7 +323,7 @@ def process_download_products(dirs, products, dry):
     return size
 
 
-# procss all downloads
+# process all downloads
 def process_download_downloads(dirs, downloads, dry):
     size = 0
 
@@ -340,7 +340,7 @@ def process_download_downloads(dirs, downloads, dry):
     return size
 
 
-# procss all files
+# process all files
 def process_download_files(dirs, files, dry):
     size = 0
 
@@ -422,7 +422,7 @@ def main():
 
             products = [product for product in products if product['downloads']]
 
-        # set up teh root directory
+        # set up the root directory
         dirs = [__DOWNLOAD_DIR__]
 
         # process all products
