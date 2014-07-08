@@ -386,7 +386,7 @@ def process_download_files(dirs, files, run):
         if os.path.exists(filepath) and verify_md5(filepath, f['md5']) or exists:
             print_msg('Up to date: %s', filename)
 
-            if data:
+            if data and f['md5'] not in data['downloads']:
                 save = True
                 data['downloads'][f['md5']] = filepath.replace(os.path.sep, '/')
         else:
