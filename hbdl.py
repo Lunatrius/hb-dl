@@ -312,7 +312,7 @@ def list_product_names(data):
 
 
 # process all products
-def process_download_products(dirs, products, dry):
+def process_download_products(dirs, products, run):
     size = 0
 
     for product in products:
@@ -320,7 +320,7 @@ def process_download_products(dirs, products, dry):
         dirs.append(product['machine_name'])
 
         try:
-            size += process_download_downloads(list(dirs), product['downloads'], dry)
+            size += process_download_downloads(list(dirs), product['downloads'], run)
         except Exception, e:
             print_msg('error[download/products] %s', e)
 
@@ -330,14 +330,14 @@ def process_download_products(dirs, products, dry):
 
 
 # process all downloads
-def process_download_downloads(dirs, downloads, dry):
+def process_download_downloads(dirs, downloads, run):
     size = 0
 
     for download in downloads:
         dirs.append(download['machine_name'])
 
         try:
-            size += process_download_files(list(dirs), download['files'], dry)
+            size += process_download_files(list(dirs), download['files'], run)
         except Exception, e:
             print_msg('error[download/downloads] %s', e)
 
@@ -347,14 +347,14 @@ def process_download_downloads(dirs, downloads, dry):
 
 
 # process all files
-def process_download_files(dirs, files, dry):
+def process_download_files(dirs, files, run):
     size = 0
 
     for f in files:
         if 'arch' in f:
             dirs.append(f['arch'])
 
-        if not dry:
+        if run:
             try:
                 os.makedirs(os.path.join(*dirs))
             except Exception, e:
@@ -370,13 +370,14 @@ def process_download_files(dirs, files, dry):
             print_msg('Up to date: %s', filename)
         else:
             size += f['file_size']
-            if dry:
+            if not run:
                 print_msg('Will download: %s (%s)', filename, pretty_file_size(f['file_size']))
             else:
                 try:
                     download_file(url, dirpath, filename)
                     if not verify_md5(filepath, f['md5']):
                         print_msg('md5 missmatch for %s!', filename)
+
                 except Exception, e:
                     print_msg('error[download/files] %s', e)
 
@@ -391,7 +392,7 @@ def main():
     parser.add_argument('-l', '--list', help='list all available products', action='store_true')
     parser.add_argument('-d', '--download', help='download the specified products or all if none is given', nargs='*')
     parser.add_argument('-p', '--platform', help='limit the selection to specified platforms', nargs='*')
-    parser.add_argument('--dry', help='show a preview of what will be downloaded', action='store_true')
+    parser.add_argument('-f', '--run', help='initiate the download (without this flag it is a dry run)', action='store_true')
 
     args = parser.parse_args()
 
@@ -432,7 +433,7 @@ def main():
         dirs = [__DOWNLOAD_DIR__]
 
         # process all products
-        size = process_download_products(dirs, products, args.dry)
+        size = process_download_products(dirs, products, args.run)
 
         # print total download amount
         print_msg('\nTotal: %s', pretty_file_size(size))
