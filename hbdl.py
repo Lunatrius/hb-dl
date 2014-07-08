@@ -415,6 +415,11 @@ def process_download_files(dirs, files, run):
                         save = True
                         data['downloads'][f['md5']] = filepath.replace(os.path.sep, '/')
 
+                except urllib2.HTTPError as e:
+                    if e.code == 403:
+                        print_msg('error[download/files] download link expired, refresh the index')
+                    else:
+                        print_msg('error[download/files] %s', e)
                 except Exception as e:
                     print_msg('error[download/files] %s', e)
 
