@@ -187,6 +187,8 @@ def refresh_index():
     # we're done
     print_msg('Done.')
 
+    return data
+
 
 # parse out the important bits
 def process_gamekey(data, gamekey, keydata):
@@ -449,7 +451,7 @@ def main():
         list_product_names(data['products'])
     else:
         if args.refresh_keys or force_refresh:
-            refresh_index()
+            data = refresh_index()
 
         # build initial list
         products = [data['products'][key] for key in data['products']]
