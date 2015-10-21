@@ -151,8 +151,8 @@ def refresh_index():
     content = response.read()
 
     # find the gamekeys
-    gamekeys = re.findall('gamekeys: \\[(.*?)\\]', content)[0]
-    gamekeys = re.findall('"([^"]+)"', gamekeys)
+    gamekeys = re.findall(r'var gamekeys\s*=\s*\[(.*?)\]', content)[0]
+    gamekeys = re.findall(r'"([^"]+)"', gamekeys)
 
     # grab all the gamekey data
     key_index = 0
