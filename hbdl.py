@@ -169,7 +169,7 @@ def refresh_index():
             content = response.read()
 
             with open(__GAMEKEY_FILE__ % gamekey, 'w') as f:
-                f.write(content)
+                json.dump(json.loads(content), f, indent=2, sort_keys=True)
 
             process_gamekey(data, gamekey, json.loads(content))
         except Exception as e:
