@@ -281,9 +281,14 @@ def get_filename(url):
 def verify_md5(filepath, md5):
     computed_md5 = ''
 
+    hasher = hashlib.md5()
     with open(filepath, 'rb') as f:
-        data = f.read()
-        computed_md5 = hashlib.md5(data).hexdigest()
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            hasher.update(data)
+    computed_md5 = hasher.hexdigest()
 
     return computed_md5 == md5
 
