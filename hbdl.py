@@ -258,6 +258,9 @@ def process_download_struct(download_struct):
             data['arch'] = download_struct['arch']
     elif 'external_link' in download_struct:
         data['external'] = download_struct['external_link']
+    elif 'asm_config' in download_struct and 'asm_manifest' in download_struct:
+        # TODO: download the files
+        print_msg('[?] Skipping asm.js resources...')
     else:
         print_msg('[!] Skipping %s', download_struct)
 
