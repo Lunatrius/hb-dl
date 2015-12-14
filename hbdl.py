@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 
 '''
 Download anything from claimed HB pages!
@@ -16,26 +16,31 @@ Usage:
 NOTE: I'm no python expert
 '''
 
+import argparse
+import getpass
+import hashlib
+import json
 import os
 import re
 import sys
-import json
-import hashlib
-import mechanize
-import cookielib
-import urllib2
-import getpass
-import argparse
+import urllib.error
+import urllib.request
 
+import http.cookiejar
+import requests
+import requests.utils
 
-__ENCODING__ = sys.stdout.encoding if sys.stdout.encoding else 'utf-8'
 __GAMEKEY_DIR__ = 'gamekeys'
-__GAMEKEY_FILE__ = __GAMEKEY_DIR__ + '/%s.json'
+__GAMEKEY_FILE__ = __GAMEKEY_DIR__ + '/{}.json'
 __DOWNLOAD_DIR__ = 'downloads'
 
 
-def print_msg(msg, *args):
-    print (msg % args).encode(__ENCODING__, errors='replace')
+def print_msg(*args):
+    message = ' '.join([str(arg) for arg in args])
+    print(message.encode(print_msg.encoding, errors='replace').decode(print_msg.encoding))
+
+
+print_msg.encoding = sys.stdout.encoding if sys.stdout.encoding else 'utf-8'
 
 
 # prettify the file size with a suffix
@@ -47,17 +52,17 @@ def pretty_file_size(size):
         size /= 1024.0
         i += 1
 
-    return '%.2f %s' % (size, units[i])
+    return '{:.2f} {}'.format(size, units[i])
 
 
 # download a file and save it to the disk
 def download_file(url, directory, filename):
-    stream = urllib2.urlopen(url)
+    stream = urllib.request.urlopen(url)
 
     with open(os.path.join(directory, filename), 'wb') as f:
         meta = stream.info()
-        file_size = int(meta.getheaders('Content-Length')[0])
-        print 'Downloading: %s' % (filename)
+        file_size = int(meta.get('Content-Length'))
+        print('Downloading: {}'.format(filename))
 
         file_size_dl = 0
         block_size = 8192
@@ -68,18 +73,23 @@ def download_file(url, directory, filename):
 
             file_size_dl += len(buff)
             f.write(buff)
-            status = r'  %11s / %11s [%6.2f%%]' % (pretty_file_size(file_size_dl), pretty_file_size(file_size), file_size_dl * 100.0 / file_size)
+            status = r'  {:11s} / {:11s} [{:6.2f}%]'.format(pretty_file_size(file_size_dl), pretty_file_size(file_size), file_size_dl * 100.0 / file_size)
             status = status + chr(8) * (len(status) + 1)
-            print status,
+            print(status, end=' ')
 
-    print ''
+    print('')
 
 
 # refresh the index file (download new versions of the gamekeys)
 def refresh_index():
+    pattern_home = 'www.humblebundle.com/home'
+    pattern_login = 'www.humblebundle.com/login'
+    pattern_guard = 'www.humblebundle.com/user/humbleguard'
+
     url_home = 'https://www.humblebundle.com/home'
-    url_login = 'https://www.humblebundle.com/login'
-    url_order = 'https://www.humblebundle.com/api/v1/order/%s'
+    url_login = 'https://www.humblebundle.com/processlogin'
+    url_guard = 'https://www.humblebundle.com/user/humbleguard'
+    url_order = 'https://www.humblebundle.com/api/v1/order/{}'
 
     # make sure the directory exists
     try:
@@ -87,107 +97,129 @@ def refresh_index():
     except Exception as e:
         pass
 
-    # set up the browser
-    br = mechanize.Browser()
-    br.set_handle_robots(False)
-
     # set up the cookie jar
-    cj = cookielib.LWPCookieJar('cookies.txt')
+    cj = http.cookiejar.LWPCookieJar('cookies.txt')
     try:
         cj.load('cookies.txt')
     except Exception as e:
         pass
     cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
-    br.set_cookiejar(cj)
+    # start a new session
+    with requests.Session() as session:
+        # override the cookie jar
+        session.cookies = cj
 
-    # open /home
-    print_msg('Opening /home...')
-    br.open(url_home)
+        # open /home
+        print_msg('Opening /home...')
+        req = session.get(url_home)
 
-    # the user is not logged in
-    if url_login in br.geturl():
-        print_msg('Trying to log in...')
-        form_index = 0
+        # the user is not logged in
+        if pattern_login in req.url:
+            print_msg('Trying to log in...')
 
-        # ask for the username/email
-        username = raw_input('Username [%s]: ' % getpass.getuser())
-        if not username:
-            username = getpass.getuser()
+            # ask for the username/email
+            username = input('Username [{}]: '.format(getpass.getuser()))
+            if not username:
+                username = getpass.getuser()
 
-        # ask for a password with confirmation
-        pprompt = lambda: (getpass.getpass(), getpass.getpass('Password (retype): '))
+            # ask for a password with confirmation
+            pprompt = lambda: (getpass.getpass(), getpass.getpass('Password (retype): '))
 
-        p1, p2 = pprompt()
-        while p1 != p2:
-            print_msg('Passwords do not match. Try again.')
             p1, p2 = pprompt()
+            while p1 != p2:
+                print_msg('Passwords do not match. Try again.')
+                p1, p2 = pprompt()
 
-        password = p1
+            password = p1
 
-        # find the login form and log in
-        for form in br.forms():
-            if form.action == url_login:
-                print_msg('Found the form!')
-                br.select_form(nr=form_index)
-                br.form['username'] = username
-                br.form['password'] = password
+            #send credentials
+            req = session.post(url_login, data={
+                '_le_csrf_token': requests.utils.dict_from_cookiejar(session.cookies).get('csrf_cookie'),
+                'goto': '',
+                'qs': '',
+                'script-wrapper': 'login_callback',
+                'username': username,
+                'password': password,
+                'authy-token': '',
+                'submit-data': '',
+            })
 
-                br.submit()
-                break
-            form_index += 1
+            # reopen /home
+            print_msg('Re-opening /home...')
+            req = session.get(url_home)
 
-    # stop the collection if we didn't land on /home
-    if url_home not in br.geturl():
-        print_msg('Did not land on /home, stopping!')
-        print_msg('  %s', br.geturl())
-        return
+            # save the cookie jar
+            cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
-    # save the cookie jar
-    cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
+        # the user has to enter the email code
+        if pattern_guard in req.url:
+            code = input('Please enter the code: ')
 
-    # read the content
-    response = br.response()
-    content = response.read()
+            # send code
+            req = session.post(url_guard, data={
+                'goto': '/home',
+                'qs': '',
+                'code': code,
+            })
 
-    # find the gamekeys
-    gamekeys = re.findall(r'var gamekeys\s*=\s*\[(.*?)\]', content)[0]
-    gamekeys = re.findall(r'"([^"]+)"', gamekeys)
+            # reopen /home
+            print_msg('Re-opening /home...')
+            req = session.get(url_home)
 
-    # grab all the gamekey data
-    key_index = 0
-    print_msg('Collecting keys...')
+            # save the cookie jar
+            cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
-    data = {}
-    data['bundles'] = {}
-    data['products'] = {}
+        # stop the collection if we didn't land on /home
+        if pattern_home not in req.url:
+            print_msg('Did not land on /home, stopping!')
+            print_msg('  {}'.format(req.url))
+            return
 
-    for gamekey in gamekeys:
-        print_msg('  %d/%d', key_index + 1, len(gamekeys))
-        try:
-            response = br.open(url_order % gamekey)
-            content = response.read()
+        # save the cookie jar
+        cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
 
-            with open(__GAMEKEY_FILE__ % gamekey, 'w') as f:
-                json.dump(json.loads(content), f, indent=2, sort_keys=True)
+        # read the content
+        content = req.text
 
-            process_gamekey(data, gamekey, json.loads(content))
-        except Exception as e:
-            print_msg('error[refresh] %s', e)
+        # find the gamekeys
+        gamekeys = re.findall(r'var gamekeys\s*=\s*\[(.*?)\]', content)[0]
+        gamekeys = re.findall(r'"([^"]+)"', gamekeys)
 
-        key_index += 1
+        # grab all the gamekey data
+        key_index = 0
+        print_msg('Collecting keys...')
 
-    # save the index file
-    with open(__GAMEKEY_FILE__ % 'index', 'w') as f:
-        json.dump(data, f, indent=2, sort_keys=True)
+        data = {}
+        data['bundles'] = {}
+        data['products'] = {}
 
-    # save the cookie jar
-    cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
+        for gamekey in gamekeys:
+            print_msg('  {}/{}'.format(key_index + 1, len(gamekeys)))
+            try:
+                req = session.get(url_order.format(gamekey))
+                content = req.text
 
-    # we're done
-    print_msg('Done.')
+                with open(__GAMEKEY_FILE__.format(gamekey), 'w') as f:
+                    json.dump(json.loads(content), f, indent=2, sort_keys=True)
 
-    return data
+                process_gamekey(data, gamekey, json.loads(content))
+            except Exception as e:
+                print_msg('error[refresh] {}'.format(e))
+
+            key_index += 1
+
+        # save the index file
+        with open(__GAMEKEY_FILE__.format('index'), 'w') as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+
+        # save the cookie jar
+        cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
+
+        # we're done
+        print_msg('Done.')
+
+        return data
 
 
 # parse out the important bits
@@ -197,7 +229,7 @@ def process_gamekey(data, gamekey, keydata):
     data['bundles'][bundle_name]['name'] = keydata['product']['human_name']
     data['bundles'][bundle_name]['key'] = gamekey
 
-    print_msg('    %s (%d)', keydata['product']['human_name'], len(keydata['subproducts']))
+    print_msg('    {} ({})'.format(keydata['product']['human_name'], len(keydata['subproducts'])))
     for item in keydata['subproducts']:
         product = process_product(item)
         if product['machine_name'] not in data['products']:
@@ -262,7 +294,9 @@ def process_download_struct(download_struct):
         # TODO: download the files
         print_msg('[?] Skipping asm.js resources...')
     else:
-        print_msg('[!] Skipping %s', download_struct)
+        print_msg('[!] Skipping...')
+        from pprint import pprint
+        pprint(download_struct)
 
     return data
 
@@ -270,7 +304,7 @@ def process_download_struct(download_struct):
 # print a fancy title
 def print_title(title):
     print_msg('================================================================')
-    print_msg('== %s', title)
+    print_msg('== {}'.format(title))
     print_msg('================================================================')
 
 
@@ -307,7 +341,7 @@ def list_platforms(data):
 
     print_title('Platforms')
     for platform in platforms:
-        print_msg('%s', platform)
+        print_msg('{}'.format(platform))
 
     print_msg('')
 
@@ -319,7 +353,7 @@ def list_product_names(data):
 
     print_title('Products')
     for product in products:
-        print_msg('%s; %s [%s]', product[0], product[1], ', '.join(map(str, product[2])))
+        print_msg('{}; {} [{}]'.format(product[0], product[1], ', '.join(map(str, product[2]))))
 
     print_msg('')
 
@@ -335,7 +369,7 @@ def process_download_products(dirs, products, run):
         try:
             size += process_download_downloads(list(dirs), product['downloads'], run)
         except Exception as e:
-            print_msg('error[download/products] %s', e)
+            print_msg('error[download/products] {}'.format(e))
 
         dirs.pop()
 
@@ -352,7 +386,7 @@ def process_download_downloads(dirs, downloads, run):
         try:
             size += process_download_files(list(dirs), download['files'], run)
         except Exception as e:
-            print_msg('error[download/downloads] %s', e)
+            print_msg('error[download/downloads] {}'.format(e))
 
         dirs.pop()
 
@@ -384,7 +418,7 @@ def process_download_files(dirs, files, run):
 
         save = False
         try:
-            with open(__GAMEKEY_FILE__ % 'index', 'r') as fh:
+            with open(__GAMEKEY_FILE__.format('index'), 'r') as fh:
                 data = json.load(fh)
                 if not 'downloads' in data:
                     data['downloads'] = {}
@@ -405,7 +439,7 @@ def process_download_files(dirs, files, run):
             knownhashes.append(f['md5'])
 
         if os.path.exists(filepath) and verify_md5(filepath, f['md5']) or exists:
-            print_msg('Up to date: %s', filename)
+            print_msg('Up to date: {}'.format(filename))
 
             if data and f['md5'] not in data['downloads']:
                 save = True
@@ -413,32 +447,33 @@ def process_download_files(dirs, files, run):
         else:
             size += f['file_size']
             if not run:
-                print_msg('Will download: %s (%s)', filename, pretty_file_size(f['file_size']))
+                print_msg('Will download: {} ({})'.format(filename, pretty_file_size(f['file_size'])))
             else:
                 try:
                     download_file(url, dirpath, filename)
                     if not verify_md5(filepath, f['md5']):
-                        print_msg('md5 missmatch for %s!', filename)
+                        print_msg('md5 missmatch for {}!'.format(filename))
                     elif data:
                         save = True
                         data['downloads'][f['md5']] = filepath.replace(os.path.sep, '/')
 
-                except urllib2.HTTPError as e:
+                except urllib.error.HTTPError as e:
                     if e.code == 403:
                         print_msg('error[download/files] download link expired, refresh the index')
                     else:
-                        print_msg('error[download/files] %s', e)
+                        print_msg('error[download/files] {}'.format(e))
                 except Exception as e:
-                    print_msg('error[download/files] %s', e)
+                    print_msg('error[download/files] {}'.format(e))
 
         if save:
-            with open(__GAMEKEY_FILE__ % 'index', 'w') as fh:
+            with open(__GAMEKEY_FILE__.format('index'), 'w') as fh:
                 json.dump(data, fh, indent=2, sort_keys=True)
 
         if 'arch' in f:
             dirs.pop()
 
     return size
+
 
 def main():
     parser = argparse.ArgumentParser(description='Download Humble Bundle stuff!')
@@ -453,7 +488,7 @@ def main():
     # load up the index file
     force_refresh = False
     try:
-        with open(__GAMEKEY_FILE__ % 'index', 'r') as f:
+        with open(__GAMEKEY_FILE__.format('index'), 'r') as f:
             data = json.load(f)
     except Exception as e:
         print_msg('Failed to read index file, forcing refresh.')
@@ -490,7 +525,7 @@ def main():
         size = process_download_products(dirs, products, args.run)
 
         # print total download amount
-        print_msg('\nTotal: %s', pretty_file_size(size))
+        print_msg('\nTotal: {}'.format(pretty_file_size(size)))
 
 
 if __name__ == '__main__':
