@@ -14,6 +14,7 @@ Usage:
     downloads all nightsky AND "the swapper" files
 
 NOTE: I'm no python expert
+NOTE 2: I really was a newbie... need to clean up all the silly things... eventually
 '''
 
 import argparse
@@ -479,7 +480,8 @@ def main():
     parser = argparse.ArgumentParser(description='Download Humble Bundle stuff!')
     parser.add_argument('-r', '--refresh-keys', help='refresh gamekeys', action='store_true')
     parser.add_argument('-l', '--list', help='list all available products', action='store_true')
-    parser.add_argument('-d', '--download', help='download the specified products or all if none is given', nargs='*')
+    parser.add_argument('-d', '--download', help='filter the products by game name (machine and human)', nargs='*')
+    parser.add_argument('-n', '--filename', help='filter the products by filename', nargs='*')
     parser.add_argument('-p', '--platform', help='limit the selection to specified platforms', nargs='*')
     parser.add_argument('-f', '--run', help='initiate the download (without this flag it is a dry run)', action='store_true')
 
@@ -504,10 +506,18 @@ def main():
         # build initial list
         products = [data['products'][key] for key in data['products']]
 
-        # filter out only things the user wants
+        # filter out only products the user wants
         if args.download and len(args.download) > 0:
             downloads = [s.lower() for s in args.download]
             products = [product for product in products if any(dl in product['machine_name'].lower() or dl in product['human_name'].lower() for dl in downloads)]
+
+        # filter out only filenames the user wants
+        if args.filename and len(args.filename) > 0:
+            filenames = [s.lower() for s in args.filename]
+            for product in products:
+                for dl in product['downloads']:
+                    dl['files'] = [entry for entry in dl['files'] if any(fn in get_filename(entry.get('url', '')) for fn in filenames)]
+            products = [product for product in products if any(dl for dl in product['downloads'] if len(dl['files']) > 0)]
 
         # filter out only platforms the user wants
         if args.platform and len(args.platform) > 0:
