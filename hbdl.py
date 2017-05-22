@@ -116,7 +116,7 @@ def refresh_index():
         req = session.get(url_home)
 
         # the user is not logged in
-        if pattern_login in req.url:
+        while pattern_login in req.url:
             print_msg('Trying to log in...')
 
             # ask for the username/email
