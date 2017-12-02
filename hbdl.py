@@ -99,7 +99,7 @@ def refresh_index():
         pass
 
     # set up the cookie jar
-    cj = http.cookiejar.LWPCookieJar('cookies.txt')
+    cj = http.cookiejar.MozillaCookieJar('cookies.txt')
     try:
         cj.load('cookies.txt')
     except Exception as e:
@@ -115,67 +115,12 @@ def refresh_index():
         print_msg('Opening /home...')
         req = session.get(url_home)
 
-        # the user is not logged in
-        while pattern_login in req.url:
-            print_msg('Trying to log in...')
-
-            # ask for the username/email
-            username = input('Username [{}]: '.format(getpass.getuser()))
-            if not username:
-                username = getpass.getuser()
-
-            # ask for a password with confirmation
-            pprompt = lambda: (getpass.getpass(), getpass.getpass('Password (retype): '))
-
-            p1, p2 = pprompt()
-            while p1 != p2:
-                print_msg('Passwords do not match. Try again.')
-                p1, p2 = pprompt()
-
-            password = p1
-
-            #send credentials
-            req = session.post(url_login, data={
-                '_le_csrf_token': requests.utils.dict_from_cookiejar(session.cookies).get('csrf_cookie'),
-                'goto': '',
-                'qs': '',
-                'script-wrapper': 'login_callback',
-                'username': username,
-                'password': password,
-                'authy-token': '',
-                'submit-data': '',
-            })
-
-            # reopen /home
-            print_msg('Re-opening /home...')
-            req = session.get(url_home)
-
-            # save the cookie jar
-            cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
-
-        # the user has to enter the email code
-        if pattern_guard in req.url:
-            code = input('Please enter the code: ')
-
-            # send code
-            req = session.post(url_guard, data={
-                'goto': '/home',
-                'qs': '',
-                'code': code,
-            })
-
-            # reopen /home
-            print_msg('Re-opening /home...')
-            req = session.get(url_home)
-
-            # save the cookie jar
-            cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
-
         # stop the collection if we didn't land on /home
         if pattern_home not in req.url:
             print_msg('Did not land on /home, stopping!')
             print_msg('  {}'.format(req.url))
-            return
+            print_msg('')
+            raise Exception('Export the cookies from your browser and put them into the cookies.txt file.')
 
         # save the cookie jar
         cj.save('cookies.txt', ignore_discard=False, ignore_expires=False)
